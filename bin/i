@@ -1,0 +1,1 @@
+cd $WS && m modules_install && m install && m btrfs_install && modprobe btrfs

@@ -1,0 +1,62 @@
+#!/bin/bash
+
+useas()
+{
+	echo "usage: $0 [-c] <dev> <num-of-devs>"
+}
+
+cleanup()
+{
+	btrfswipe
+
+	# delete all partitions
+	parts=$(fdisk -l $dev | grep "^/dev" | cut -d" " -f1 | grep -Eo '[0-9]+$')
+	for part in $parts
+	do
+		parted -s $dev rm $part
+	done
+}
+
+clean="false"
+while getopts ":c" opt
+do
+	case ${opt} in
+	c)
+		clean="true"
+		;;
+	\?)
+		echo "$0: option not supported"
+		exit 1
+		;;
+	esac
+done
+
+shift $((OPTIND -1))
+trap useas EXIT
+	: ${1?"arg1 <devs> missing"} && dev=$1
+	[ $clean == "false" ] && \
+	: ${2?"arg2 <devnr> missing"} && devnr=$2
+trap - EXIT
+
+cleanup
+[ $clean == "true" ] && exit 0
+
+#size="10G"
+
+totalsize=$(blockdev --getsz $dev)
+oneG=$((1024*1024*1024))
+size=$(($(($((totalsize/$devnr)) * 512))/${oneG}))G
+cnt=$devnr
+[ $cnt = 0 ] || { echo -e "n\np\n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\np\n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\np\n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\ne\n\n\n\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+[ $cnt = 0 ] || { echo -e "n\n\n+$size\nw" | fdisk $dev > /dev/null 2>&1 && cnt=$((cnt--)); }
+sync
+parted -s $dev print
+exit $?

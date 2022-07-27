@@ -1,0 +1,51 @@
+run()
+{
+        local ret
+        >/tmp/run.out
+        >/tmp/run.err
+
+        echo -n "---- ${*} ..... :"
+        #echo ${*} 2>/tmp/run.err 1>/tmp/run.out
+        echo ${*} | bash 2>/tmp/run.err 1>/tmp/run.out
+        ret=$?
+        echo "$ret ----"
+        if [ $ret -ne 0 ]; then
+                [ ${quite} == "false" ] && {
+                        echo STDERR:
+                        cat /tmp/run.err
+                        echo
+                }
+                [ ${skip} == "false" ] && exit 1
+        fi
+        if [ $outdump == "true" ]; then
+                cat /tmp/run.out
+                echo
+        fi
+}
+
+: ${1?"arg1 <options[-s]> missing"}
+
+#options:
+skip="false"
+outdump="false"
+quite="false"
+while getopts ":soq" opt
+do
+        case ${opt} in
+        s)
+                skip="true"
+                ;;
+        o)
+                outdump="true"
+                ;;
+        q)
+                # The command may fail it is ok
+                quite="true"
+                ;;
+        \?) echo "$0: option not supported"
+                exit
+                ;;
+        esac
+done
+shift $((OPTIND -1))
+run $@

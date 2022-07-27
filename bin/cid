@@ -1,0 +1,18 @@
+#!/bin/bash
+
+cd $WS/btrfs-devel
+
+git log --oneline | head -1 | grep -q "btrfs: fix re-dirty process of tree-log nodes"
+if [ $? == 0 ]; then
+	commit=$(git log --oneline | head -2 | tail -1 | awk '{print $1}')
+	echo "${commit}+"
+	if [ "$commit" != "d3575156f662" ]; then
+		echo NOT d3575156f662
+		exit 1
+	else
+		exit 0
+	fi
+fi
+git log --oneline | head -1 | awk '{print $1}'
+
+cd $OLDPWD

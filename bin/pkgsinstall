@@ -1,0 +1,206 @@
+#!/bin/bash
+
+common()
+{
+#To allow root ssh login:
+# passwd root
+# cat /etc/ssh/sshd_config
+#   PermitRootLogin yes
+# systemctl restart sshd
+
+	run systemctl enable sshd
+	run systemctl start sshd
+	run dnf install -y -q vim
+	run dnf install -y -q yum-utils
+}
+
+fsperf()
+{
+	run yum install -y -q gcc-c++
+	run yum install -y -q python3
+	run yum install -y -q python3-devel
+	run yum install -y -q python3-migrate
+	
+	run pip3 install sqlalchemy
+	run pip3 install sqlalchemy-migrate
+	run pip3 install jinja2
+	run pip3 install matplotlib
+	run pip3 install texttable
+	run pip3 install psutil
+}
+
+fstest()
+{
+	common
+
+	run systemctl stop systemd-udevd
+	run systemctl disable systemd-udevd
+	run useradd -m fsgqa
+	run groupadd fsgqa
+	run useradd 123456-fsgqa
+	run useradd fsgqa2
+
+	run yum install -y -q dbench
+	run yum install -y -q fsverity-utils
+	run yum install -y -q duperemove
+	run yum install -y -q acl
+	run yum install -y -q attr
+	run yum install -y -q automake
+	run yum install -y -q bc
+	run yum install -y -q dbench
+	run yum install -y -q dump
+	run yum install -y -q e2fsprogs
+	run yum install -y -q fio
+	run yum install -y -q gawk
+	run yum install -y -q gcc
+	run yum install -y -q indent
+	run yum install -y -q libtool
+	run yum install -y -q lvm2
+	run yum install -y -q make
+	run yum install -y -q psmisc
+	run yum install -y -q quota
+	run yum install -y -q sed
+	run yum install -y -q xfsdump
+	run yum install -y -q xfsprogs
+	run yum install -y -q libacl-devel
+	run yum install -y -q libaio-devel
+	run yum install -y -q libuuid-devel
+	run yum install -y -q xfsprogs-devel
+	run yum install -y -q btrfs-progs-devel
+	run yum install -y -q python
+	run yum install -y -q sqlite
+	run yum install -y -q liburing
+	run yum install -y -q libcap-devel
+	run yum install -y -q fuse-sshfs
+	run yum install -y -q libblkid-devel
+	run yum install -y -q libzstd-devel
+	run yum install -y -q lzo-devel
+	run yum install -y -q sysbench
+	run yum install -y -q sysstat
+
+	# t; ./configure; make; make install
+}
+
+oci()
+{
+# ref:
+# https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm
+
+	hostnamectl | grep -qw System | grep -qw "Oracle Linux Server 8" && {
+		dnf -y install oraclelinux-developer-release-el8 && \
+		dnf -y install python36-oci-cli; \
+	} || { 
+		bash --accept-all-defaults \
+-c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)"
+	}
+
+	hostnamectl | grep -qw System | grep -qw "Oracle Linux Server 7" && {
+		yum -y install python36-oci-cli
+	}
+
+	#Macos
+	brew update && brew install oci-cli
+
+	oci session authenticate
+
+	oci session import --session-archive /Volumes/bin/oci_session_token.zip
+}
+
+dev_uek()
+{
+	cat /etc/system-release | grep -q Oracle || return
+
+	# UEK DEVELOPMENT
+	vpn status | grep -q Disconnected || \
+		run yum-config-manager \
+			--add-repo https://fajita.us.oracle.com/repo/uek-devtools-el7.repo
+
+	# common
+	run yum install --enablerepo="ol8_codeready_builder" -y -q fuse-sshfs
+	run yum-config-manager --add-repo http://yum.oracle.com/repo/OracleLinux/OL8/developer/UEKR6/x86_64
+	run yum install -y -q libdtrace-ctf-devel
+
+	requiredrepo="ol8_UEKR6|ol8_addons|ol8_appstream|ol8_baseos_latest|ol8_codeready_builder|ol8_distro_builder|ol8_kvm_appstream"
+	dnf repolist all | egrep $requiredrepo | egrep "disabled$" | \
+		awk '{print $1}' | xargs sudo yum-config-manager --enable
+
+	[[ "$(uname -m)" == "aarch64" ]] && { [[ "$(uname -r)" == *"el8"* ]] && \
+		dnf config-manager --add-repo http://yum.oracle.com/repo/OracleLinux/OL8/developer/EPEL/aarch64; }
+	[[ "$(uname -m)" == "x86_64" ]] &&  { [[ "$(uname -r)" == *"el8"* ]] && \
+		dnf config-manager --add-repo http://yum.oracle.com/repo/OracleLinux/OL8/developer/EPEL/x86_64; }
+
+	[[ "$(uname -m)" == "x86_64" ]] &&  { [[ "$(uname -r)" == *"el7"* ]] && \
+		yum-config-manager --add-repo http://yum.oracle.com/repo/OracleLinux/OL7/developer_EPEL/x86_64; }
+}
+
+# development packages
+dev()
+{
+	common
+	dev_uek
+
+	run yum install -y -q make
+	run yum install -y -q gcc
+	run yum install -y -q flex
+	run yum install -y -q openssl
+	run yum install -y -q openssl-devel
+	run yum install -y -q bc
+	run yum install -y -q elfutils-libelf-devel
+	run yum install -y -q hostname
+	run yum install -y -q perl
+	run yum install -y -q ncurses-devel
+	run yum install -y -q libuuid-devel
+	run yum install -y -q xfsprogs-devel
+	run yum install -y -q libattr-devel
+	run yum install -y -q libacl-devel
+	run yum install -y -q libaio-devel
+
+	run yum install -y -q autoconf
+	run yum install -y -q automake
+	run yum install -y -q xmlto
+	run yum install -y -q asciidoctor
+	run yum install -y -q e2fsprogs-devel
+	run yum install -y -q libblkid-devel
+	run yum install -y -q libzstd-devel
+	run yum install -y -q lzo-devel
+	run yum install -y -q libtool
+	run yum install -y -q python3
+	run yum install -y -q libpython39-devel
+	run yum install -y -q python39-setuptools
+	run yum install -y -q python3-devel
+	run yum install -y -q bison
+	run yum install -y -q libmount-devel
+	run yum install -y -q git
+	run yum install -y -q git-email
+	run yum install -y -q codespell
+	run yum install -y -q ninja-devel
+	run yum install -y -q gettext-devel
+	run yum install -y -q qemu
+	run yum install -y -q bpftrace
+	run dnf install -y -q gh
+	run yum install -y -q psmisc
+	run yum install -y -q systemd-devel
+	run yum install -y -q socat
+	run yum install -y -q libudev-devel
+	run yum install -y -q zstd
+
+	#For the git sendemail
+	run cpan Mail::Address
+
+	run dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+	run dnf install -qy gh
+	run pip3 install b4
+	run dnf install -qy msmtp pass mutt
+}
+
+uexit()
+{
+	echo "$0 fstype"
+	exit
+}
+
+: ${1?"arg1 <subcomd> is missing"} || uexit
+subcmd=$1
+[[ "$subcmd" == "dev" ]] && dev
+[[ "$subcmd" == "fstest" ]] && fstest
+[[ "$subcmd" == "fsperf" ]] && fsperf

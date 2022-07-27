@@ -1,0 +1,29 @@
+#!/bin/bash
+
+: ${1?"arg1 <mnt> is missing"}
+: ${2?"arg2 <cmd-to-run> is missing"}
+
+mnt=$1; shift
+mountpoint -q $mnt || { echo "ERROR: $mnt is not mounted"; exit 1; }
+
+declare -A devread
+
+for dev in $(btrfs filesystem show -m $mnt | grep devid |awk '{print $8}')
+do
+	prefix=$(echo $dev | rev | cut -d"/" -f1 | rev)
+	sysfs_path=$(find /sys | grep $prefix/stat$)
+
+	devread[$sysfs_path]=$(cat $sysfs_path | awk '{print $1}')
+done
+
+#echo fio_cmd: "$@"
+"$@"
+
+echo
+for sysfs_path in ${!devread[@]}
+do
+	dev=$(echo $sysfs_path | rev | cut -d"/" -f2 | rev)
+	new=$(cat $sysfs_path | awk '{print $1}')
+	old=${devread[$sysfs_path]}
+	echo -n "$dev $((new - old)) "
+done

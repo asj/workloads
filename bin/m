@@ -1,0 +1,48 @@
+#!/bin/bash
+
+usage()
+{
+	echo 'usage:'
+	echo '$0 [cmd]'
+	exit
+}
+
+fail()
+{
+	echo $*
+	exit 1
+}
+
+run_make()
+{
+	[ "${cmd}" == "btrfs_install" ] && btrfsunload
+	[ "${cmd}" == "btrfs_install" ] && cmd="M=fs/btrfs modules_install" || {\
+		[ "${cmd}" == "btrfs" ] && cmd="M=fs/btrfs modules";
+	}
+
+	[ "${cmd}" == "tools" ] && cmd="tools/all"
+	[ "${cmd}" == "perf" ] && cmd="tools/perf"
+
+	echo $do $j_cpu_nr $obj --quiet $cmd
+	$(echo $do) $obj $j_cpu_nr --quiet $cmd
+
+	echo "Return error code $?"
+}
+
+os=$(uname -s)
+do=""
+cmd=""
+obj=""
+j_cpu_nr=""
+
+dir=$(pwd | rev | cut -d"/" -f1| rev)
+branch=$(git branch | grep "*" | awk '{print $NF}' | sed 's/)//')
+obj="/export/bench/asj/obj/$dir/$branch"
+[ -d $obj ] || fail "set up '$obj'"
+obj="O=$obj"
+j_cpu_nr="-j $(cat /proc/cpuinfo | grep ^process|wc -l)"
+
+cmd="$*"
+do="make"
+
+run_make

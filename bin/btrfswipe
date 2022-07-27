@@ -1,0 +1,13 @@
+#!/bin/bash
+
+umount /mnt/test > /dev/null 2>&1
+umount /mnt/scratch > /dev/null 2>&1
+umount /btrfs > /dev/null 2>&1
+
+for i in $(blkid | grep btrfs| awk -F":" '{print $1}')
+do
+        wipefs -a $i
+done
+
+btrfs device scan --forget
+

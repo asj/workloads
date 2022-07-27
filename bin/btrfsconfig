@@ -1,0 +1,18 @@
+#!/bin/bash
+mnt=$1
+if [ "$mnt" == "" ]; then
+	echo "ERROR: need mnt"
+	exit 1;
+fi
+mountpoint -q $mnt || { echo "ERROR: not a mnt"; exit 1; }
+
+devsnr=$(btrfs fi show -m $mnt | grep Total | cut -d" " -f4- --complement |xargs)
+raid=$(btrfs fi df $mnt | grep -i data | awk '{print $2}' | uniq|sed 's/://g')
+cnt=$(btrfs fi df $mnt | grep -i data | awk '{print $2}' | uniq | wc -l)
+
+if [ "$cnt" != "1" ]; then
+	echo ERROR: more than one raid profile
+	exit 1
+fi
+
+echo $devsnr" "$raid

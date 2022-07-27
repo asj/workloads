@@ -1,0 +1,6 @@
+os=$(uname -s)
+if [ $os == "Linux" ]; then
+	cat /proc/cpuinfo | grep ^process|wc -l
+else
+	sysctl -a | grep machdep.cpu.thread_count | awk '{print $2}'
+fi

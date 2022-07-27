@@ -1,0 +1,7 @@
+Generate fio performance results for the given kernel and config. And compare it with the past results.
+
+./runtest
+
+Command to view the last run results
+
+./analyzedata ./datalocation 

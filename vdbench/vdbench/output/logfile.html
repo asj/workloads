@@ -1,0 +1,30 @@
+<title>Vdbench output/logfile.html</title><pre>
+Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
+Vdbench distribution: vdbench50407
+
+18:21:45.896 input argument scanned: '-f/home/asj/bin/vdbench.config'
+18:21:45.896 java.vendor                   Red Hat, Inc.
+18:21:45.896 java.home                     /usr/lib/jvm/java-11-openjdk-11.0.13.0.8-2.fc35.x86_64
+18:21:45.896 java.vm.specification.version 11
+18:21:45.897 java.vm.version               11.0.13+8
+18:21:45.897 java.vm.vendor                Red Hat, Inc.
+18:21:45.897 java.specification.version    11
+18:21:45.897 java.class.version            55.0
+18:21:45.897 user.name                     asj
+18:21:45.897 user.dir                      /home/asj/Downloads/vdbench
+18:21:45.897 java.io.tmpdir                /tmp
+18:21:45.897 java.class.path               ./:./classes:./vdbench.jar
+18:21:45.897 os.name                       Linux
+18:21:45.897 os.arch                       amd64
+18:21:45.897 os.version                    5.15.5-200.fc35.x86_64
+18:21:45.897 sun.arch.data.model           64
+18:21:45.901 Flushing all reports
+18:21:46.424 
+18:21:46.425 Unexpected EOF in parameter file.
+18:21:46.425 
+java.lang.RuntimeException: Unexpected EOF in parameter file.
+	at Vdb.common.failure(common.java:350)
+	at Vdb.Vdb_scan.parms_split(Vdb_scan.java:732)
+	at Vdb.FsdEntry.readParms(FsdEntry.java:122)
+	at Vdb.Vdbmain.parseParameterLines(Vdbmain.java:721)
+	at Vdb.Vdbmain.main(Vdbmain.java:602)

@@ -1,0 +1,36 @@
+#!/bin/bash
+
+echo READ
+echo -BW-   -io-
+#echo MB/s  GB
+cat $1 | while read LINE; do
+	echo $LINE | grep -q "#" && continue
+	echo $LINE | grep -q "^$" && continue
+	echo $LINE | grep -q "echo" && { echo; echo ${LINE} | bash; continue; }
+
+	[ -f $LINE/fio.out ] || { echo Error: File not found: $LINE/fio.out; exit 1; }
+
+	ios=""
+	grep -q "fio: ENOSPC on laying out file, stopping" $LINE/fio.out
+	if [ $? == 0 ]; then
+		data="ENOSPC"
+	else
+		data=$(cat $LINE/fio.out | grep READ: | awk '{print $3" "$7}'| sed 's/(\|)\|,//g')
+		#data=$(cat $LINE/fio.out | grep READ: | awk '{print $3}'| sed 's/(\|)\|,//g')
+		ios=$(cat $LINE/fio.out | grep -A1 "Disk stats" | grep -v Disk | awk '{print $1" "$2}' | sed 's/:\|\,\|ios=//g')
+	fi
+
+	if [ "$ios" == "" ]; then
+		devnr=$(echo $LINE | cut -d"/" -f2 | cut -d"_" -f2 | cut -d"d" -f2)
+		[ -f $LINE/nohup.out ] && ios=$(cat $LINE/nohup.out | grep -A $devnr iocounts 2>/dev/null)
+	else
+		ios="iocounts: $ios"
+	fi
+
+	config=$(cat $LINE/config 2>/dev/null)
+	[ $? != 0 ] && config="---------------------------------"
+
+	echo -e $data'\t'$ios'\t'$config'\t'$LINE
+	#echo -e $data'\t'$ios'\t'$LINE
+	#echo -e $data'\t'$LINE
+done

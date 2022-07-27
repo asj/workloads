@@ -1,0 +1,358 @@
+#!/bin/bash
+
+eecho()
+{
+	if [ $DMESG_PID != 0 ]; then
+		kill $DMESG_PID > /dev/null
+		wait $DMESG_PID > /dev/null 2>&1
+	fi
+	echo "ERROR: $1"
+	exit 1
+}
+
+clean()
+{
+	[ -d $LOGDIR ] && eecho "$LOGDIR is already present"
+
+	umount /btrfs > /dev/null 2>&1
+	if [ "$IO" == "writeable" ]; then
+		for dev in ${DEVS[@]}; do
+			umount $dev > /dev/null 2>&1
+			wipefs -a $dev > /dev/null 2>&1 || eecho "wipe failed"
+		done
+	fi
+	[[ "$FSTYPE" == "btrfs" ]] && {
+		modprobe -r btrfs || eecho "rmmod failed"
+		modprobe btrfs  || eecho "addmod failed"
+	}
+	echo 3 > /proc/sys/vm/drop_caches
+}
+
+dc_start()
+{
+	devstat ${DEVX[@]} >> $LOGDIR/devstat.out
+
+#	iostat -x ${DEVX[@]} 1 > $LOGDIR/iostat.out &
+#	IOSTAT_PID=$!
+
+	#BPFTRACE_PID=$(bpftrace_count)
+
+	dmesg -C
+	dmesg -kw > $LOGDIR/dmesg.out &
+	DMESG_PID=$!
+}
+
+dc_start_undo()
+{
+	devstat ${DEVX[@]} >> $LOGDIR/devstat.out
+
+#	if [ $IOSTAT_PID != 0 ]; then
+#		kill $IOSTAT_PID > /dev/null 2>&1
+#		wait $IOSTAT_PID > /dev/null 2>&1
+#	fi
+#	IOSTAT_PID=0
+
+	if [ $DMESG_PID != 0 ]; then
+		kill $DMESG_PID > /dev/null 2>&1
+		wait $DMESG_PID > /dev/null 2>&1
+	fi
+	DMESG_PID=0
+}
+
+run_fio()
+{
+	OPT_IO="--readonly"
+	[ "$IO" == "writeable" ] && OPT_IO=""
+	if [ "$RAID" != "raw" ] && [ "$RAID" != "xfs" ]; then
+		readstat /btrfs fio --eta=auto --output=$CMDLOG \
+		--name fiotest --directory=/btrfs $OPT_IO \
+		--rw=randread --bs=4k --size=4G --ioengine=libaio --iodepth=16 $DIRECT \
+		--time_based=1 --runtime=900 --randrepeat=1 --gtod_reduce=1  \
+		--group_reporting=1 --numjobs=$cpus | tee -a $RESULT
+	else
+		for d in ${DEVX[@]}; do
+			fio --eta=auto --output=$CMDLOG --name fiotest \
+				--filename=$d $OPT_IO --rw=randread --bs=4k \
+				--size=4G --ioengine=libaio --iodepth=16 \
+				$DIRECT --time_based=1 --runtime=900 \
+				--randrepeat=1 --gtod_reduce=1 --group_reporting=1 \
+				--numjobs=$cpus | tee -a $RESULT
+		done
+	fi
+}
+
+setup()
+{
+	mkdir -p $LOGDIR
+
+	[ "$RAID" == "raw" ] && {
+		for d in ${DEVX[@]}; do
+			[ -b $d ] || eecho "$d: Not a block device"
+		done
+		return
+	}
+	OPT_MNT="-o ro"
+	if [ "$IO" == "writeable" ]; then
+		OPT_MNT=""
+		if [ "$FSTYPE" == "btrfs" ]; then
+			MKFS="mkfs.btrfs -d$RAID -m$RAID"
+		else
+			MKFS="mkfs.xfs"
+		fi
+
+		run -q $MKFS -L fiotest -fq ${DEVX[@]}
+		if [ $? != 0 ]; then
+			eecho "Error: mkfs failed"
+		fi
+
+		run mount $OPT_MNT ${DEVX[0]} /btrfs
+		if [ $? != 0 ]; then
+			eecho "mount failed"
+		fi
+	fi
+
+	mountpointtype /btrfs $FSTYPE || echo "mounttype failed"
+}
+
+log_and_run()
+{
+	clean
+
+	setup
+
+	dc_start
+
+	#cpus=$(cat /proc/cpuinfo | grep ^process|wc -l)
+	cpus=32
+
+	echo Start of fio test for "$LOGDIR" ... | tee -a /dev/kmsg
+	> $CMDLOG
+
+	[[ "$dry" == "false" ]] && run_fio
+	touch $CMDLOG
+
+	# cp /fio.example $CMDLOG
+	echo End of fio test for commit $COMMIT | tee -a /dev/kmsg
+
+	sed -i '/fiotest: Laying out IO file/d' $CMDLOG
+
+	dc_start_undo
+}
+
+workout()
+{
+	RAID=$1
+	if [ "$RAID" == "xfs" ]; then
+		FSTYPE="xfs"
+	else
+		FSTYPE="btrfs"
+	fi
+	shift
+	DEVX=("$@")
+	devnr=${#DEVX[@]}
+	RESULT="./data/results.out"
+	LOGDIR="./${HOST}/${RAID}_d${devnr}/$VER"
+	CMDLOG=$LOGDIR/fio.out
+
+	echo $LOGDIR
+	echo devs=${DEVX[@]}" "devnr=$devnr
+	echo |tee -a $RESULT
+	echo --- $(date) ----- >> $RESULT
+	#btrfsls || eecho "Compiled binary not loaded"
+
+	log_and_run
+
+	echo -n ${HOST}" "${RAID}_d${devnr}" "$COMMIT" "|tee -a $RESULT
+	echo -n $IO" " |tee -a $RESULT
+	cat $CMDLOG | grep read: |tee -a $RESULT
+	#cat $LOGDIR/dc.out | egrep -v "^$" | egrep -v ": 0"  | tee -a $RESULT
+	echo done | tee -a $RESULT
+	btrfsconfig  /btrfs > $LOGDIR/config
+	echo $LOGDIR
+	echo ============================
+	echo
+}
+
+dry="false"
+while getopts ":x" opt
+do
+	case ${opt} in
+		x)
+			dry="true"
+			;;
+		\?) eecho "opt not found"
+			;;
+	esac
+done
+shift $((OPTIND -1))
+
+HOST=$(uname -n|cut -d"." -f1)
+#COMMIT=_$(../bin/cid)
+#COMMIT=_d3575156f662
+#COMMIT=""
+FSTYPE="btrfs"
+#FSTYPE="xfs"
+VER=$(uname -r)$COMMIT
+RAID=""
+LOGDIR=""
+CMDLOG=""
+IOSTAT_PID=0
+DMESG_PID=0
+#DIRECT=""
+DIRECT="--direct=1"
+DEVSIZE="230G"
+showlogdirs=""
+
+IO="writeable"
+if [ "$IO" != "writeable" ]; then
+	x="$(btrfs fi show fiotest | grep devid | awk '{print $8}')"
+	tmp_dev=( $x )
+	workout "single" "${tmp_dev[@]}"
+	exit
+fi
+
+TAG=cpus=32
+VER=${VER}_${TAG}
+DEVS=($(scratchdevs 1 2))
+workout "raid0" "${DEVS[@]}"
+umount /btrfs
+showlogdirs="$showlogdirs $LOGDIR"
+
+mdraid0()
+{
+COMMIT="${DEVSIZE}mdR0"
+COMMIT=${COMMIT}_1
+VER=$(uname -r)_$COMMIT
+DEVS=($(mdcreate /dev/md0 raid0 $(scratchdevs 1 2)))
+workout "xfs" "${DEVS[@]}"
+umount /btrfs
+mdcreate -c /dev/md0 raid0 $(scratchdevs 1 2)
+showlogdirs="$showlogdirs $LOGDIR"
+
+COMMIT="${DEVSIZE}mdR0"
+COMMIT=${COMMIT}_1
+VER=$(uname -r)_$COMMIT
+DEVS=($(mdcreate /dev/md0 raid0 $(scratchdevs 1 2)))
+workout "single" "${DEVS[@]}"
+umount /btrfs
+mdcreate -c /dev/md0 raid0 $(scratchdevs 1 2)
+showlogdirs="$showlogdirs $LOGDIR"
+
+COMMIT="${DEVSIZE}fileloopmdR0"
+COMMIT=${COMMIT}_1
+VER=$(uname -r)_$COMMIT
+lodevs=$(loopdevs 2 ${DEVSIZE})
+DEVS=($(mdcreate /dev/md0 raid0 $lodevs))
+workout "xfs" "${DEVS[@]}"
+umount /btrfs
+mdcreate -c /dev/md0 raid0 $lodevs
+loopdevs -c $lodevs
+showlogdirs="$showlogdirs $LOGDIR"
+
+COMMIT="${DEVSIZE}fileloopmdR0"
+COMMIT=${COMMIT}_1
+VER=$(uname -r)_$COMMIT
+lodevs=$(loopdevs 2 ${DEVSIZE})
+DEVS=($(mdcreate /dev/md0 raid0 $lodevs))
+workout "single" "${DEVS[@]}"
+umount /btrfs
+mdcreate -c /dev/md0 raid0 $lodevs
+loopdevs -c $lodevs
+showlogdirs="$showlogdirs $LOGDIR"
+}
+
+nodirect()
+{
+DIRECT=""
+COMMIT="nodirect"
+COMMIT=${COMMIT}_3
+VER=$(uname -r)_$COMMIT
+DEVS=($(scratchdevs 1 2))
+workout "raid0" "${DEVS[@]}"
+umount /btrfs
+showlogdirs="$showlogdirs $LOGDIR"
+}
+
+loopfile()
+{
+DIRECT="--direct=1"
+COMMIT="${DEVSIZE}fileloop"
+COMMIT=${COMMIT}_230g
+VER=$(uname -r)_$COMMIT
+lodevs=$(loopdevs 2 $DEVSIZE)
+DEVS=($lodevs)
+workout "raid0" "${DEVS[@]}"
+umount /btrfs
+loopdevs -c $lodevs
+showlogdirs="$showlogdirs $LOGDIR"
+}
+
+extra()
+{
+DEVS=( $(scratchdevs 1) )
+tmp_dev=( ${DEVS[@]:0:1} )
+workout "single" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+DEVS=( $(scratchdevs 1 2) )
+tmp_dev=( ${DEVS[@]:0:2} )
+workout "single" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+DEVS=( $(scratchdevs 1 2) )
+tmp_dev=( ${DEVS[@]:0:2} )
+workout "raid1" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+DEVS=( $(scratchdevs 1 2) )
+tmp_dev=( ${DEVS[@]:0:2} )
+workout "raid0" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+}
+
+
+md()
+{
+COMMIT="rawmdR0"
+COMMIT=${COMMIT}_1
+VER=$(uname -r)_$COMMIT
+DEVS=($(mdcreate /dev/md0 raid0 $(scratchdevs 1 2)))
+tmp_dev=( ${DEVS[@]:0:1} )
+workout "raw" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+DEVS=($(mdcreate /dev/md0 raid0 $(scratchdevs 1 2)))
+tmp_dev=( ${DEVS[@]:0:1} )
+workout "single" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+COMMIT="rawmdR1"
+COMMIT=${COMMIT}_1
+VER=$(uname -r)_$COMMIT
+DEVS=($(mdcreate /dev/md0 raid1 $(scratchdevs 1 2)))
+tmp_dev=(${DEVS[@]:0:1})
+workout "raw" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+DEVS=($(mdcreate /dev/md0 raid1 $(scratchdevs 1 2)))
+tmp_dev=(${DEVS[@]:0:1})
+workout "single" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+COMMIT="rawmdLn"
+COMMIT=${COMMIT}_1
+VER=$(uname -r)_$COMMIT
+DEVS=($(mdcreate /dev/md0 linear $(scratchdevs 1 2)))
+tmp_dev=(${DEVS[@]:0:1})
+workout "raw" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+
+DEVS=($(mdcreate /dev/md0 linear $(scratchdevs 1 2)))
+tmp_dev=(${DEVS[@]:0:1})
+workout "single" "${tmp_dev[@]}"
+showlogdirs="$showlogdirs $LOGDIR"
+}
+
+echo
+echo
+echo $showlogdirs

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+#obj
+objpath="/export/bench/asj/obj/linux/master/fs/btrfs/btrfs.ko"
+
+#modinfo
+extrapath=$(modinfo btrfs | head -1 | awk '{print $2}')
+
+kernelpath="$(echo $extrapath | sed 's/extra\/btrfs.ko/kernel\/fs\/btrfs/g')"
+
+ls -l $objpath
+ls -l $extrapath
+ls -l $kernelpath/btrfs.ko
+
+cnt=$(shasum $objpath $extrapath $kernelpath/btrfs.ko | cut -d" " -f1 | uniq | wc -l)
+
+if [ $cnt != 1 ]; then
+	echo ERROR: Compiled binary NOT loaded.
+	exit 2
+fi

@@ -1,0 +1,6 @@
+
+OBJ="/export/bench/asj/obj"
+dir=$(pwd | rev | cut -d"/" -f1| rev)
+branch=$(git branch | grep "*" | awk '{print $2}')
+obj="$OBJ/$dir/$branch"
+echo "$obj"

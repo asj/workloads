@@ -1,0 +1,67 @@
+#!/bin/bash
+
+: ${1?"Option <-p|-v|-l> is missing"} || return
+: ${2?"Arg2 <device> is missing"} || return
+
+devprefix=""
+dev=$2
+
+[ -z $1 ] && return
+[ -z $2 ] && return
+
+
+while true
+do
+
+case ${1} in
+	"-p")
+		echo "Creating physical partitions"
+		lvmdevs -c $dev
+		phydevs $dev 10 || return 1
+		devprefix="${dev}"
+		;;
+	"-l")
+		echo "Creating virtual partitions"
+		phydevs -c $dev
+		lvmdevs $dev 10 || return 1
+		devprefix="/dev/mapper/vg-scratch"
+		;;
+	"-v")
+		echo "Creating loop devs"
+		loopdevs $dev 10 || return 1
+		devprefix="/dev/loop"
+		;;
+	*)
+		echo "option not supported"
+		;;
+esac
+
+if [ "$devprefix" == "" ]; then
+	echo "Error: Failed to setup the device '$dev'"
+	break
+fi
+
+unset SCRATCH_DEV SCRATCH_DEV_POOL TEST_DEV TEST_DIR SCRATCH_MNT PERF_CONFIGNAME
+
+export TEST_DIR=/mnt/test
+export SCRATCH_MNT=/mnt/scratch
+
+echo Untested code below
+[ ! -b ${devprefix}1 ] && devprefix=${devprefix}p
+export TEST_DEV=${devprefix}1
+export SCRATCH_DEV_POOL="${devprefix}2 ${devprefix}3 ${devprefix}5 ${devprefix}6 ${devprefix}7"
+export TEST_LOGDEV=${devprefix}8
+export SCRATCH_LOGDEV=${devprefix}9
+export LOGWRITES_DEV=${devprefix}10
+export STATUS=1
+export PERF_CONFIGNAME="test1"
+
+#	export MKFS_OPTIONS="-s 4K"
+#	export MOUNT_OPTIONS="-o max_inline=64K"
+
+mkfs.btrfs -f $TEST_DEV
+
+export STATUS=0
+break
+
+done

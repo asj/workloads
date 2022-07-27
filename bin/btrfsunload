@@ -1,0 +1,11 @@
+for i in $(cat /proc/self/mounts | grep btrfs | cut -d' ' -f2)
+do
+	[ $i != "/" ] && umount $i
+done
+
+modprobe -r btrfs; modprobe -r btrfs
+if [ $? != 0 ]; then
+	echo "Uninstall failed"
+	exit 1
+fi
+echo 3 > /proc/sys/vm/drop_caches

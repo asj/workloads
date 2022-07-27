@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Collect the block device parameters to compare across the hosts.
+
+usage="$0 <dev>"
+
+DEV=$1
+[ -z $DEV ] && { eexit "$usage"; }
+HOST=$(uname -n | cut -d"." -f1)
+VER=$(uname -r)
+ITR=1
+LOGFILE=data/${HOST}_${DEV}_${VER}_${ITR}
+echo $LOGFILE
+
+[ -f $LOGFILE ] && eexit "Old file exist: $LOGFILE"
+touch $LOGFILE
+> $LOGFILE
+
+devpath="/sys/block/$DEV"
+cd $devpath
+for f in $(find . -type f)
+do
+	f=$devpath$(echo $f |sed 's/^\.//g')
+	echo $f >> ${OLDPWD}/$LOGFILE
+	cat $f >> ${OLDPWD}/$LOGFILE
+done
+cd $OLDPWD
+
+echo $LOGFILE >> ./datalocations

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+[ $# -ne 2 ] && { echo usage: $0 val1 val2; exit; }
+
+l=$1
+m=$2
+[ $2 -lt $1 ] && { l=$2; m=$1; }
+d=$(($m-$l))
+echo l = $l m = $m d = $d
+d=$(($d*100))
+echo $(($d/$l))

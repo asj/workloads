@@ -1,0 +1,61 @@
+#!/bin/bash
+
+VG="vg"
+LV="/dev/$VG"
+LVNAME="scratch"
+
+useas()
+{
+	echo "$0 [-c] <dev> <num-of-lv>"
+}
+
+cleanup()
+{
+	btrfswipe
+	vgremove -y $VG > /dev/null 2>&1
+	pvremove -y $dev > /dev/null 2>&1
+}
+
+clean="false"
+while getopts ":c" opt
+do
+	case ${opt} in
+	c)
+		clean="true"
+		;;
+	\?)
+		echo "$0: option not supported"
+		exit 1
+		;;
+	esac
+done
+
+shift $((OPTIND -1))
+trap useas EXIT
+	: ${1?"arg1 <devs> missing"} && dev=$1
+	if [ $clean  = "false" ]; then
+	: ${2?"arg2 <num-of-lv> missing"} && devnr=$2
+	fi
+trap - EXIT
+
+cleanup
+[ $clean == "true" ] && exit 0
+
+pvcreate -y $dev || { exit 1; }
+vgcreate $VG $dev || { exit 1; }
+
+totalsize=$(printf "%.0f" $(vgdisplay --units g $VG | grep "VG Size" | awk '{print $3}'))
+size=$((totalsize/$devnr))
+echo totalsize=$totalsize size=$size
+
+num=1
+while true
+do
+	[[ $num -ge $devnr ]] && {
+		lvcreate --type linear -l 100%FREE --name $LVNAME$num $VG  || exit 1
+		break
+	}
+	lvcreate --type linear --size ${size}g --name $LVNAME$num $VG || exit 1
+	num=$((num + 1))
+done
+exit 0

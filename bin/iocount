@@ -1,0 +1,57 @@
+#!/bin/bash
+
+#https://www.kernel.org/doc/Documentation/block/stat.txt
+
+cnt=""
+device="$1"
+cnt="$2"
+
+[ -z $device ] &&
+	readarray -t dev < <(find /sys/devices | grep /stat$) ||
+	readarray -t dev < <(find /sys/devices | grep /$device/stat$)
+
+declare -a stats
+
+for i in "${!dev[@]}"
+do
+	stats[$i]=$(cat ${dev[$i]})
+done
+
+while true
+do
+	for i in "${!dev[@]}"
+	do
+		new=$(cat ${dev[$i]})
+		old=$(echo ${stats[$i]})
+
+		#name
+		echo -n -e $(echo ${dev[$i]} | rev| cut -d"/" -f2 | rev):'\t'
+
+		srv=$(($(echo $new | awk '{print $4}') * 1000))
+		srv_ms=$(echo $new | awk '{print $4}')
+		ios=$(echo $new | awk '{print $1}')
+		sec=$(echo $new | awk '{print $3}')
+
+		lat_io=$((srv/ios))
+		lat_sec=$((srv/sec))
+		infl=$(echo $new | awk '{print $9}')
+		lat_est=$((lat_io * infl))
+
+		echo -n nspio=$lat_io" "
+#		echo -n lat_sec=$lat_sec serv_time=$srv" "ios=$ios" "sec=$sec" "
+		echo -n infl=$infl nspio_est=$lat_est
+
+		echo -n -e '\t'
+		y=1
+		for x in ios meg sec tic
+		do
+			oldpar=$(echo $old | awk -v p=$y '{print $p}')
+			newpar=$(echo $new | awk -v p=$y '{print $p}')
+			echo -n $x=$((newpar - oldpar))" "
+			y=$((y+1))
+		done
+		echo
+	done
+	[ -z $cnt ] || { cnt=$((cnt - 1)); { [ $cnt == 0 ] && break; } }
+	[ -z $device ] && { echo; echo ---------; sleep 1;}
+done

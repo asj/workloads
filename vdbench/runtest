@@ -1,0 +1,10 @@
+#!/bin/bash
+
+hostname=$(uname -n | cut -d"." -f1)
+LOG=./data/$hostname/$(uname -r)
+rm -rf output  > /dev/null 2>&1
+
+vdbench/vdbench -f vdbench.conf
+btrfsconfig /btrfs > output/config
+mkdir -p $LOG
+echo $LOG

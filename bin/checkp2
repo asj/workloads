@@ -1,0 +1,12 @@
+#!/bin/bash
+
+[ -f /continuecheck ] && {
+	commit=$(cid)
+	echo "Running test for commit $commit" | tee -a /continuecheck.out
+	btrfsls | tee -a /continuecheck.out
+	if [ $? != 0 ]; then
+		exit 1
+	fi
+	runtest | tee -a /continuecheck.out
+	check
+}

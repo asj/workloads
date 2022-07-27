@@ -1,0 +1,16 @@
+#!/bin/bash
+
+echo "write"
+echo "IOps  response  mb/sec"
+#while IFS= read -r LINE || [[ -n "$LINE" ]]; do
+#done < "$1"
+
+cat $1 | while read LINE; do
+	echo $LINE | grep -q "#" && continue
+	[ -f $LINE/summary.html ] || { echo Error: File not found '$LINE/summary.html'; exit 1; }
+	data=$(cat $LINE/summary.html  | grep avg | tail -1 | awk '{print $10 "\t" $11 "\t" $13}')
+	config=$(cat $LINE/config 2>/dev/null)
+	[ $? != 0 ] && config="--------------------"
+
+	echo -e $data'\t'$config'\t'$LINE
+done

@@ -1,0 +1,7 @@
+echo "        read[ios   merges sectors     wait]   write[ios  merges sectos      wait] inflight  rw[active   wait] discard[ios   merges   sectors  wait] flush[ios   wait]"
+for dev in $@
+do      
+	d=$(echo $dev | rev | cut -d"/" -f1 | rev)
+        echo -n "$d "
+        cat $(find /sys -name stat | grep $d)
+done

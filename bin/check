@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# : ${1?"arg1 <subcomd> is missing"} || exit 1
+while [ -f /continuecheck ]
+do
+	commit=$(head -1 /continuecheck)
+	if [ "$commit" == "" ]; then
+		rm /continuecheck
+	else
+		echo -n pop" "$commit" " >> /continuecheck.out
+		bk
+		git reset --hard $commit || exit 1
+		echo checked-out $commit ... >> /continuecheck.out
+		m
+		i
+		echo "ready to run $commit" >> /continuecheck.out
+		cd $OLDPWD
+		sed -i '1d' /continuecheck
+		btrfsls >> /continuecheck.out
+		if [ $? != 0 ]; then
+			reboot
+		fi
+		runtest >> /continuecheck.out
+	fi
+done

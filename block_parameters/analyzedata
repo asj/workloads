@@ -1,0 +1,12 @@
+#!/bin/bash
+LOGS=./datalocations
+
+cat $LOGS | while read LINE; do
+	[ -f $LINE ] || eexit "File not found: $LINE"
+	echo $LINE | grep -q "#" && continue
+	echo $LINE | grep -q "^$" && continue
+	echo $LINE | grep -q "echo" && { echo; echo ${LINE} | bash; continue; }
+
+	echo $LINE
+	cat $LINE
+done
